@@ -1,14 +1,19 @@
 package request
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"log"
 	"net/url"
 	"strings"
 	"unicode"
 )
 
-const separator = "\r\n"
+const (
+	bufferSize = 16
+	separator  = "\r\n"
+)
 
 var ErrMalformedRequestLine = errors.New("malformed request-line")
 var ErrMissingSeparator = errors.New("missing separator")
@@ -16,9 +21,12 @@ var ErrInvalidMethodName = errors.New("incorrect method name")
 var ErrIncorrectRequestTarget = errors.New("incorrect request target")
 var ErrInvalidProtocolOrVersion = errors.New("incorrect protocol name or protocol version, only HTTP/1.1 allowed")
 
-type Request struct {
-	RequestLine RequestLine
-}
+type parserState string
+
+const (
+	StateInitialized parserState = "initialized"
+	StateDone        parserState = "done"
+)
 
 type RequestLine struct {
 	Method        string
@@ -26,67 +34,130 @@ type RequestLine struct {
 	HttpVersion   string
 }
 
-func IsUpperAndLetters(s string) bool {
+type Request struct {
+	RequestLine RequestLine
+	state       parserState
+}
+
+func NewRequest() *Request {
+	return &Request{state: StateInitialized}
+}
+func (r *Request) done() bool {
+	return r.state == StateDone
+}
+
+func (r *Request) parse(data []byte) (int, error) {
+	read := 0
+outer:
+	for {
+		switch r.state {
+		case StateInitialized:
+			rl, n, err := parseRequestLine(data[read:])
+			if err != nil {
+				return 0, err
+			}
+			if n == 0 {
+				break outer
+			}
+			r.RequestLine = *rl
+			read += n
+
+			r.state = StateDone
+		case StateDone:
+			break outer
+		default:
+			return 0, errors.New("unknown parser state")
+		}
+	}
+	return read, nil
+}
+
+func parseRequestLine(s []byte) (*RequestLine, int, error) {
+	if s[0] == ' ' {
+		return nil, 0, ErrMalformedRequestLine
+	}
+
+	idx := bytes.Index(s, []byte(separator))
+	if idx == -1 {
+		return nil, 0, nil
+	}
+
+	startLine := s[:idx]
+
+	startLineParts := bytes.Split(startLine, []byte{' '})
+	if len(startLineParts) != 3 {
+		return nil, 0, ErrMalformedRequestLine
+	}
+
+	method := string(startLineParts[0])
+	reqTarget := string(startLineParts[1])
+	protocol := string(startLineParts[2])
+
+	if !isUpperAndLetters(method) {
+		return nil, 0, ErrInvalidMethodName
+	}
+
+	if _, err := url.Parse(reqTarget); err != nil {
+		return nil, 0, ErrIncorrectRequestTarget
+	}
+
+	protocolParts := strings.Split(protocol, "/")
+
+	if len(protocolParts) != 2 || protocolParts[0] != "HTTP" || protocolParts[1] != "1.1" {
+		return nil, 0, ErrInvalidProtocolOrVersion
+	}
+
+	rl := &RequestLine{
+		Method:        method,
+		RequestTarget: reqTarget,
+		HttpVersion:   protocol,
+	}
+
+	return rl, len(startLine), nil
+}
+
+func RequestFromReader(reader io.Reader) (*Request, error) {
+	buf := make([]byte, bufferSize)
+	bufLen := 0
+	req := NewRequest()
+
+	for !req.done() {
+		if bufLen == cap(buf) {
+			log.Printf("old buf size %d", len(buf))
+			newBufPart := make([]byte, bufferSize)
+			buf = append(buf, newBufPart...)
+			log.Printf("new buf size %d", len(buf))
+		}
+		readedBytes, err := reader.Read(buf[bufLen:])
+
+		if readedBytes == 0 && err == io.EOF {
+			req.state = StateDone
+			break
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		bufLen += readedBytes
+		parsedBytes, err := req.parse(buf[:bufLen])
+
+		if err != nil {
+			return nil, err
+		}
+
+		copy(buf, buf[parsedBytes:bufLen])
+		bufLen -= parsedBytes
+
+	}
+	return req, nil
+}
+
+func isUpperAndLetters(s string) bool {
 	for _, c := range s {
 		if !unicode.IsLetter(c) || !unicode.IsUpper(c) {
 			return false
 		}
 	}
 	return true
-}
-
-func parseRequestLine(s string) (*RequestLine, string, error) {
-	if s[0] == ' ' {
-		return nil, s, ErrMalformedRequestLine
-	}
-
-	idx := strings.Index(s, separator)
-	if idx == -1 {
-		return nil, s, ErrMissingSeparator
-	}
-
-	startLine := s[:idx]
-	restData := s[idx+len(separator):]
-
-	startLineParts := strings.Split(startLine, " ")
-	if len(startLineParts) != 3 {
-		return nil, restData, ErrMalformedRequestLine
-	}
-
-	if !IsUpperAndLetters(startLineParts[0]) {
-		return nil, restData, ErrInvalidMethodName
-	}
-
-	if _, err := url.Parse(startLineParts[1]); err != nil {
-		return nil, restData, ErrIncorrectRequestTarget
-	}
-
-	protocolParts := strings.Split(startLineParts[2], "/")
-
-	if len(protocolParts) != 2 || protocolParts[0] != "HTTP" || protocolParts[1] != "1.1" {
-		return nil, restData, ErrInvalidProtocolOrVersion
-	}
-
-	rl := &RequestLine{
-		Method:        startLineParts[0],
-		RequestTarget: startLineParts[1],
-		HttpVersion:   startLineParts[2],
-	}
-
-	return rl, restData, nil
-}
-
-func RequestFromReader(reader io.Reader) (*Request, error) {
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-
-	str := string(data)
-	rl, _, err := parseRequestLine(str)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Request{RequestLine: *rl}, nil
 }
