@@ -1,41 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
-	"io"
 	"log"
 	"net"
+
+	"github.com/SSL0/http-impl/internal/request"
 )
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-	go func(ch chan string) {
-		currentLine := ""
-		for {
-			data := make([]byte, 8)
-			n, err := f.Read(data)
-			if err != nil {
-				break
-			}
-
-			data = data[:n]
-			if i := bytes.IndexByte(data, '\n'); i != -1 {
-				currentLine += string(data[:i])
-				data = data[i+1:]
-				ch <- currentLine
-				currentLine = ""
-			}
-			currentLine += string(data)
-		}
-		if len(currentLine) != 0 {
-			ch <- currentLine
-		}
-		close(ch)
-	}(ch)
-
-	return ch
-}
 
 func main() {
 	l, err := net.Listen("tcp", "localhost:42069")
@@ -52,19 +22,20 @@ func main() {
 
 		log.Printf("conn successfully accepted\n")
 
-		ch := getLinesChannel(conn)
-		for {
-			v, ok := <-ch
-			if !ok {
-				break
-			}
-			fmt.Printf("%s\n", v)
+		req, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("failed make request from reader %v", err)
 		}
 		err = conn.Close()
 		if err != nil {
 			log.Fatalf("failed to close connection %v", err)
 		}
-		log.Printf("conn successfully closed\n")
+		log.Printf(
+			"Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n",
+			req.RequestLine.Method,
+			req.RequestLine.RequestTarget,
+			req.RequestLine.HttpVersion,
+		)
 
 	}
 }
