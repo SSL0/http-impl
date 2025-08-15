@@ -45,7 +45,6 @@ func main() {
 	}
 
 	for {
-
 		conn, err := l.Accept()
 		if err != nil {
 			log.Fatalf("failed to accept connection %v", err)
