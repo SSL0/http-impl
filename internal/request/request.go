@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"net/url"
 	"strings"
 	"unicode"
 )
 
 const (
-	bufferSize = 16
+	bufferSize = 1024
 	separator  = "\r\n"
 )
 
@@ -123,10 +122,8 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 	for !req.done() {
 		if bufLen == cap(buf) {
-			log.Printf("old buf size %d", len(buf))
 			newBufPart := make([]byte, bufferSize)
 			buf = append(buf, newBufPart...)
-			log.Printf("new buf size %d", len(buf))
 		}
 		readedBytes, err := reader.Read(buf[bufLen:])
 
