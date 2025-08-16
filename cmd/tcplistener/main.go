@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 
@@ -30,12 +31,18 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to close connection %v", err)
 		}
-		log.Printf(
-			"Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n",
+
+		fmt.Printf("Request line:\n")
+		fmt.Printf(
+			"- Method: %s\n- Target: %s\n- Version: %s\n",
 			req.RequestLine.Method,
 			req.RequestLine.RequestTarget,
 			req.RequestLine.HttpVersion,
 		)
 
+		fmt.Printf("Headers:\n")
+		for k, v := range req.Headers {
+			fmt.Printf("- %s: %s\n", k, v)
+		}
 	}
 }
