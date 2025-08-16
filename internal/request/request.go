@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -21,9 +22,10 @@ const (
 type parserState string
 
 const (
-	stateInitialized    parserState = "init"
-	stateParsingHeaders parserState = "pars_head"
-	stateDone           parserState = "done"
+	stateRequestLine parserState = "init"
+	stateHeaders     parserState = "headers"
+	stateBody        parserState = "body"
+	stateDone        parserState = "done"
 )
 
 type RequestLine struct {
@@ -35,24 +37,71 @@ type RequestLine struct {
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       parserState
 }
 
 func NewRequest() *Request {
-	return &Request{Headers: headers.NewHeaders(), state: stateInitialized}
+	return &Request{
+		Headers: headers.NewHeaders(),
+		Body:    []byte{},
+		state:   stateRequestLine}
 }
 
 func (r *Request) done() bool {
 	return r.state == stateDone
 }
 
+func RequestFromReader(reader io.Reader) (*Request, error) {
+	buf := make([]byte, bufferSize)
+	bufLen := 0
+	req := NewRequest()
+
+	for !req.done() {
+		if bufLen == cap(buf) {
+			newBufPart := make([]byte, len(buf))
+			buf = append(buf, newBufPart...)
+		}
+		readedBytes, err := reader.Read(buf[bufLen:])
+
+		if readedBytes == 0 && err == io.EOF {
+			req.state = stateDone
+			break
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		bufLen += readedBytes
+		parsedBytes, err := req.parse(buf[:bufLen])
+
+		if err != nil {
+			return nil, err
+		}
+
+		copy(buf, buf[parsedBytes:bufLen])
+		bufLen -= parsedBytes
+	}
+
+	if req.Headers.GetInt("Content-Length", 0) != len(req.Body) {
+		return nil, fmt.Errorf("body not equal content-length")
+	}
+
+	return req, nil
+}
+
 func (r *Request) parse(data []byte) (int, error) {
 	totalParsedBytes := 0
 outer:
 	for {
+		currentData := data[totalParsedBytes:]
+		if len(currentData) == 0 {
+			break
+		}
 		switch r.state {
-		case stateInitialized:
-			rl, n, err := parseRequestLine(data[totalParsedBytes:])
+		case stateRequestLine:
+			rl, n, err := parseRequestLine(currentData)
 
 			if err != nil {
 				return 0, err
@@ -65,9 +114,9 @@ outer:
 			r.RequestLine = *rl
 			totalParsedBytes += n
 
-			r.state = stateParsingHeaders
-		case stateParsingHeaders:
-			n, done, err := r.Headers.Parse(data[totalParsedBytes:])
+			r.state = stateHeaders
+		case stateHeaders:
+			n, done, err := r.Headers.Parse(currentData)
 
 			if err != nil {
 				return totalParsedBytes, err
@@ -79,6 +128,27 @@ outer:
 			totalParsedBytes += n
 
 			if done {
+				r.state = stateBody
+			}
+
+		case stateBody:
+			contentLengthValue, ok := r.Headers.GetString("Content-Length")
+			if !ok || contentLengthValue == "" {
+				r.state = stateDone
+				break outer
+			}
+
+			contentLength, err := strconv.Atoi(contentLengthValue)
+			if err != nil || contentLength == 0 {
+				r.state = stateDone
+				break outer
+			}
+
+			remaining := min(contentLength-len(r.Body), len(currentData))
+			r.Body = append(r.Body, currentData[:remaining]...)
+			totalParsedBytes += remaining
+
+			if len(r.Body) == contentLength {
 				r.state = stateDone
 			}
 		case stateDone:
@@ -136,40 +206,6 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 	}
 
 	return rl, len(startLine) + CRLFLen, nil
-}
-
-func RequestFromReader(reader io.Reader) (*Request, error) {
-	buf := make([]byte, bufferSize)
-	bufLen := 0
-	req := NewRequest()
-
-	for !req.done() {
-		if bufLen == cap(buf) {
-			newBufPart := make([]byte, len(buf))
-			buf = append(buf, newBufPart...)
-		}
-		readedBytes, err := reader.Read(buf[bufLen:])
-
-		if readedBytes == 0 && err == io.EOF {
-			req.state = stateDone
-			break
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		bufLen += readedBytes
-		parsedBytes, err := req.parse(buf[:bufLen])
-
-		if err != nil {
-			return nil, err
-		}
-
-		copy(buf, buf[parsedBytes:bufLen])
-		bufLen -= parsedBytes
-	}
-	return req, nil
 }
 
 func isUpperAndLetters(s string) bool {

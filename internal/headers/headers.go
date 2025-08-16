@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -18,7 +19,44 @@ func NewHeaders() Headers {
 	return Headers{}
 }
 
-func (h Headers) Parse(data []byte) (n int, done bool, err error) {
+func (h *Headers) GetString(key string) (string, bool) {
+	v, ok := (*h)[strings.ToLower(key)]
+	return v, ok
+}
+
+func (h *Headers) GetInt(key string, defaultValue int) int {
+	v, ok := (*h)[strings.ToLower(key)]
+
+	if !ok {
+		return defaultValue
+	}
+
+	i, err := strconv.Atoi(v)
+
+	if err != nil {
+		return defaultValue
+	}
+
+	return i
+}
+
+func (h *Headers) Set(key, value string) {
+	key = strings.ToLower(key)
+
+	if v, ok := (*h)[key]; ok {
+		(*h)[key] = fmt.Sprintf("%s, %s", v, value)
+	} else {
+		(*h)[key] = value
+	}
+}
+
+func (h *Headers) ForEach(callback func(k, v string)) {
+	for k, v := range *h {
+		callback(k, v)
+	}
+}
+
+func (h *Headers) Parse(data []byte) (n int, done bool, err error) {
 	if len(data) == 0 {
 		return 0, false, nil
 	}
@@ -47,10 +85,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 			return n, done, fmt.Errorf("failed to parse field-line: %v", err)
 		}
 
-		if h[key] != "" {
-			h[key] += ", "
-		}
-		h[key] += value
+		h.Set(key, value)
 
 		data = data[sepIdx+sepLen:]
 		n += len(line) + CRLFLen
@@ -73,7 +108,6 @@ func parseFieldLine(fieldLine []byte) (string, string, error) {
 		return "", "", fmt.Errorf("failed to validate field-name: %s", key)
 	}
 
-	key = strings.ToLower(key)
 	value = strings.TrimSpace(value)
 
 	if strings.ContainsAny(value, fieldValueInvalidChars) {

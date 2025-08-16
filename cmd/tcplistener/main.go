@@ -41,8 +41,9 @@ func main() {
 		)
 
 		fmt.Printf("Headers:\n")
-		for k, v := range req.Headers {
+
+		req.Headers.ForEach(func(v, k string) {
 			fmt.Printf("- %s: %s\n", k, v)
-		}
+		})
 	}
 }
