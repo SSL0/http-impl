@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -132,14 +131,9 @@ outer:
 			}
 
 		case stateBody:
-			contentLengthValue, ok := r.Headers.GetString("Content-Length")
-			if !ok || contentLengthValue == "" {
-				r.state = stateDone
-				break outer
-			}
+			contentLength := r.Headers.GetInt("Content-Length", -1)
 
-			contentLength, err := strconv.Atoi(contentLengthValue)
-			if err != nil || contentLength == 0 {
+			if contentLength == -1 {
 				r.state = stateDone
 				break outer
 			}
