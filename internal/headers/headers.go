@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -65,19 +66,42 @@ func parseFieldLine(fieldLine []byte) (string, string, error) {
 		return "", "", fmt.Errorf("failed to split in to parts line: %s, parts %d", fieldLine, len(parts))
 	}
 
-	key := parts[0]
-	value := parts[1]
+	key := string(parts[0])
+	value := string(parts[1])
 
-	if bytes.HasSuffix(key, []byte{' '}) {
+	if !isToken(key) {
 		return "", "", fmt.Errorf("failed to validate field-name: %s", key)
 	}
 
-	value = bytes.TrimSpace(value)
+	key = strings.ToLower(key)
+	value = strings.TrimSpace(value)
 
-	if bytes.ContainsAny(value, fieldValueInvalidChars) {
+	if strings.ContainsAny(value, fieldValueInvalidChars) {
 		return "", "", fmt.Errorf("value contains invalid chars: %s", value)
 	}
 
-	return string(key), string(value), nil
+	return key, value, nil
+}
+
+func isToken(s string) bool {
+	for _, ch := range s {
+		valid := false
+		if (ch >= 'A' && ch <= 'Z') ||
+			(ch >= 'a' && ch <= 'z') ||
+			(ch >= '0' && ch <= '9') {
+			valid = true
+		}
+
+		switch ch {
+		case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+			valid = true
+		}
+		if !valid {
+			fmt.Printf("VALIDATE ERROR: %s, %d", string(ch), ch)
+			return false
+		}
+
+	}
+	return true
 
 }
