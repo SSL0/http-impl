@@ -178,3 +178,28 @@ func TestRequestLineParse(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestRequestLineAndHeadersParse(t *testing.T) {
+	t.Run("ok, standart header", func(t *testing.T) {
+		reader := &chunkReader{
+			data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+			numBytesPerRead: 3,
+		}
+
+		r, err := RequestFromReader(reader)
+		require.NoError(t, err)
+		require.NotNil(t, r)
+		assert.Equal(t, "localhost:42069", r.Headers["host"])
+		assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
+		assert.Equal(t, "*/*", r.Headers["accept"])
+	})
+
+	t.Run("fail, Malformed Header", func(t *testing.T) {
+		reader := &chunkReader{
+			data:            "GET / HTTP/1.1\r\nHost localhost:42069\r\n\r\n",
+			numBytesPerRead: 3,
+		}
+		_, err := RequestFromReader(reader)
+		require.Error(t, err)
+	})
+}

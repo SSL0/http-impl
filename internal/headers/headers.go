@@ -72,6 +72,7 @@ func parseFieldLine(fieldLine []byte) (string, string, error) {
 	if !isToken(key) {
 		return "", "", fmt.Errorf("failed to validate field-name: %s", key)
 	}
+	fmt.Println(string(fieldLine))
 
 	key = strings.ToLower(key)
 	value = strings.TrimSpace(value)

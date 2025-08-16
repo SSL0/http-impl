@@ -8,18 +8,22 @@ import (
 	"net/url"
 	"strings"
 	"unicode"
+
+	"github.com/SSL0/http-impl/internal/headers"
 )
 
 const (
-	bufferSize = 8
+	bufferSize = 1024
 	CRLF       = "\r\n"
+	CRLFLen    = 2
 )
 
 type parserState string
 
 const (
-	StateInitialized parserState = "initialized"
-	StateDone        parserState = "done"
+	stateInitialized    parserState = "init"
+	stateParsingHeaders parserState = "pars_head"
+	stateDone           parserState = "done"
 )
 
 type RequestLine struct {
@@ -30,23 +34,25 @@ type RequestLine struct {
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     headers.Headers
 	state       parserState
 }
 
 func NewRequest() *Request {
-	return &Request{state: StateInitialized}
+	return &Request{Headers: headers.NewHeaders(), state: stateInitialized}
 }
+
 func (r *Request) done() bool {
-	return r.state == StateDone
+	return r.state == stateDone
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	read := 0
+	totalParsedBytes := 0
 outer:
 	for {
 		switch r.state {
-		case StateInitialized:
-			rl, n, err := parseRequestLine(data[read:])
+		case stateInitialized:
+			rl, n, err := parseRequestLine(data[totalParsedBytes:])
 
 			if err != nil {
 				return 0, err
@@ -57,16 +63,31 @@ outer:
 			}
 
 			r.RequestLine = *rl
-			read += n
+			totalParsedBytes += n
 
-			r.state = StateDone
-		case StateDone:
+			r.state = stateParsingHeaders
+		case stateParsingHeaders:
+			n, done, err := r.Headers.Parse(data[totalParsedBytes:])
+
+			if err != nil {
+				return totalParsedBytes, err
+			}
+
+			if n == 0 {
+				break outer
+			}
+			totalParsedBytes += n
+
+			if done {
+				r.state = stateDone
+			}
+		case stateDone:
 			break outer
 		default:
 			return 0, errors.New("unknown parser state")
 		}
 	}
-	return read, nil
+	return totalParsedBytes, nil
 }
 
 func parseRequestLine(data []byte) (*RequestLine, int, error) {
@@ -114,7 +135,7 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 		HttpVersion:   protocol,
 	}
 
-	return rl, len(startLine), nil
+	return rl, len(startLine) + CRLFLen, nil
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
@@ -130,7 +151,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		readedBytes, err := reader.Read(buf[bufLen:])
 
 		if readedBytes == 0 && err == io.EOF {
-			req.state = StateDone
+			req.state = stateDone
 			break
 		}
 
@@ -147,7 +168,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		copy(buf, buf[parsedBytes:bufLen])
 		bufLen -= parsedBytes
-
 	}
 	return req, nil
 }
