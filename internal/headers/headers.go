@@ -8,7 +8,7 @@ import (
 
 const (
 	CRLF                   = "\r\n"
-	CRLFLen                = 1
+	CRLFLen                = 2
 	fieldValueInvalidChars = "\r\n\x00"
 )
 
@@ -97,7 +97,6 @@ func isToken(s string) bool {
 			valid = true
 		}
 		if !valid {
-			fmt.Printf("VALIDATE ERROR: %s, %d", string(ch), ch)
 			return false
 		}
 
