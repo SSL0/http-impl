@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log"
 	"net/url"
+	"os"
 	"strings"
 	"unicode"
 )
 
 const (
-	bufferSize = 1024
-	separator  = "\r\n"
+	bufferSize = 8
+	crlf       = "\r\n"
 )
 
 var ErrMalformedRequestLine = errors.New("malformed request-line")
@@ -52,12 +54,15 @@ outer:
 		switch r.state {
 		case StateInitialized:
 			rl, n, err := parseRequestLine(data[read:])
+
 			if err != nil {
 				return 0, err
 			}
+
 			if n == 0 {
 				break outer
 			}
+
 			r.RequestLine = *rl
 			read += n
 
@@ -76,7 +81,7 @@ func parseRequestLine(s []byte) (*RequestLine, int, error) {
 		return nil, 0, ErrMalformedRequestLine
 	}
 
-	idx := bytes.Index(s, []byte(separator))
+	idx := bytes.Index(s, []byte(crlf))
 	if idx == -1 {
 		return nil, 0, nil
 	}
@@ -120,12 +125,17 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	bufLen := 0
 	req := NewRequest()
 
+	f, _ := os.Create("log.txt")
+	defer f.Close()
+	log.SetOutput(f)
+
 	for !req.done() {
 		if bufLen == cap(buf) {
-			newBufPart := make([]byte, bufferSize)
+			newBufPart := make([]byte, len(buf))
 			buf = append(buf, newBufPart...)
 		}
 		readedBytes, err := reader.Read(buf[bufLen:])
+		log.Printf("readed %d", readedBytes)
 
 		if readedBytes == 0 && err == io.EOF {
 			req.state = StateDone
