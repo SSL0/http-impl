@@ -3,15 +3,12 @@ package headers
 import (
 	"bytes"
 	"fmt"
-	"regexp"
-	"strings"
 )
 
 const (
 	CRLF                   = "\r\n"
 	CRLFLen                = 1
 	fieldValueInvalidChars = "\r\n\x00"
-	fieldNameRegExp        = `^([\w-]+)$`
 )
 
 type Headers map[string]string
@@ -52,7 +49,6 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		if h[key] != "" {
 			h[key] += ", "
 		}
-
 		h[key] += value
 
 		data = data[sepIdx+sepLen:]
@@ -69,21 +65,19 @@ func parseFieldLine(fieldLine []byte) (string, string, error) {
 		return "", "", fmt.Errorf("failed to split in to parts line: %s, parts %d", fieldLine, len(parts))
 	}
 
-	key := string(parts[0])
-	value := string(parts[1])
+	key := parts[0]
+	value := parts[1]
 
-	value = strings.TrimSpace(value)
-
-	re := regexp.MustCompile(fieldNameRegExp)
-	// TODO: rewrite validation
-	if !re.MatchString(key) {
+	if bytes.HasSuffix(key, []byte{' '}) {
 		return "", "", fmt.Errorf("failed to validate field-name: %s", key)
 	}
 
-	if strings.ContainsAny(value, fieldValueInvalidChars) {
+	value = bytes.TrimSpace(value)
+
+	if bytes.ContainsAny(value, fieldValueInvalidChars) {
 		return "", "", fmt.Errorf("value contains invalid chars: %s", value)
 	}
 
-	return key, value, nil
+	return string(key), string(value), nil
 
 }
