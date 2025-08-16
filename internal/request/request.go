@@ -3,24 +3,17 @@ package request
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
-	"log"
 	"net/url"
-	"os"
 	"strings"
 	"unicode"
 )
 
 const (
 	bufferSize = 8
-	crlf       = "\r\n"
+	CRLF       = "\r\n"
 )
-
-var ErrMalformedRequestLine = errors.New("malformed request-line")
-var ErrMissingSeparator = errors.New("missing separator")
-var ErrInvalidMethodName = errors.New("incorrect method name")
-var ErrIncorrectRequestTarget = errors.New("incorrect request target")
-var ErrInvalidProtocolOrVersion = errors.New("incorrect protocol name or protocol version, only HTTP/1.1 allowed")
 
 type parserState string
 
@@ -76,21 +69,25 @@ outer:
 	return read, nil
 }
 
-func parseRequestLine(s []byte) (*RequestLine, int, error) {
-	if s[0] == ' ' {
-		return nil, 0, ErrMalformedRequestLine
+func parseRequestLine(data []byte) (*RequestLine, int, error) {
+	if len(data) == 0 {
+		return nil, 0, nil
 	}
 
-	idx := bytes.Index(s, []byte(crlf))
+	if data[0] == ' ' {
+		return nil, 0, fmt.Errorf("data starts from whitespace")
+	}
+
+	idx := bytes.Index(data, []byte(CRLF))
 	if idx == -1 {
 		return nil, 0, nil
 	}
 
-	startLine := s[:idx]
+	startLine := data[:idx]
 
 	startLineParts := bytes.Split(startLine, []byte{' '})
 	if len(startLineParts) != 3 {
-		return nil, 0, ErrMalformedRequestLine
+		return nil, 0, fmt.Errorf("start line parts not equal three: %s", startLine)
 	}
 
 	method := string(startLineParts[0])
@@ -98,17 +95,17 @@ func parseRequestLine(s []byte) (*RequestLine, int, error) {
 	protocol := string(startLineParts[2])
 
 	if !isUpperAndLetters(method) {
-		return nil, 0, ErrInvalidMethodName
+		return nil, 0, fmt.Errorf("method contains unsupported chars: %s", method)
 	}
 
 	if _, err := url.Parse(reqTarget); err != nil {
-		return nil, 0, ErrIncorrectRequestTarget
+		return nil, 0, fmt.Errorf("failed to parse url from request target: %s", reqTarget)
 	}
 
 	protocolParts := strings.Split(protocol, "/")
 
 	if len(protocolParts) != 2 || protocolParts[0] != "HTTP" || protocolParts[1] != "1.1" {
-		return nil, 0, ErrInvalidProtocolOrVersion
+		return nil, 0, fmt.Errorf("invalid protocol or protocol version: %s", protocol)
 	}
 
 	rl := &RequestLine{
@@ -125,17 +122,12 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	bufLen := 0
 	req := NewRequest()
 
-	f, _ := os.Create("log.txt")
-	defer f.Close()
-	log.SetOutput(f)
-
 	for !req.done() {
 		if bufLen == cap(buf) {
 			newBufPart := make([]byte, len(buf))
 			buf = append(buf, newBufPart...)
 		}
 		readedBytes, err := reader.Read(buf[bufLen:])
-		log.Printf("readed %d", readedBytes)
 
 		if readedBytes == 0 && err == io.EOF {
 			req.state = StateDone

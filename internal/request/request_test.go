@@ -121,7 +121,6 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err := RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrMalformedRequestLine, err)
 
 		reader = &chunkReader{
 			data:            "GET /coffee HTTP/1.1 TEST \r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
@@ -129,7 +128,6 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err = RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrMalformedRequestLine, err)
 	})
 
 	t.Run("fail, Invalid method(out of order) request line", func(t *testing.T) {
@@ -139,7 +137,6 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err := RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrInvalidMethodName, err)
 
 		reader = &chunkReader{
 			data:            "123 /coffee HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
@@ -147,7 +144,6 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err = RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrInvalidMethodName, err)
 	})
 
 	t.Run("fail, Invalid version in request line", func(t *testing.T) {
@@ -164,7 +160,6 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err = RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrInvalidProtocolOrVersion, err)
 
 		reader = &chunkReader{
 			data:            "GET /coffee FTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
@@ -172,7 +167,6 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err = RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrInvalidProtocolOrVersion, err)
 	})
 
 	t.Run("fail, Invalid beginning of line", func(t *testing.T) {
@@ -182,6 +176,5 @@ func TestRequestLineParse(t *testing.T) {
 		}
 		_, err := RequestFromReader(reader)
 		require.Error(t, err)
-		assert.ErrorIs(t, ErrMalformedRequestLine, err)
 	})
 }
