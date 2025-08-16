@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"sync/atomic"
 )
@@ -33,18 +33,14 @@ func Serve(port uint16) (*Server, error) {
 
 func (s *Server) listen() {
 	s.closed.Store(false)
-	for {
-		if s.closed.Load() {
-			return
-		}
-
+	for !s.closed.Load() {
 		conn, err := (*s.listener).Accept()
 
 		if err != nil {
-			log.Fatalf("failed to accept connection %v", err)
+			slog.Error("failed to listen", "context_error", err)
 		}
 
-		log.Printf("conn successfully accepted\n")
+		slog.Info("conn successfully accepted", "remote_client_ip", conn.RemoteAddr().String())
 
 		go s.handle(conn)
 	}
@@ -52,8 +48,16 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	response := []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello World!\n")
-	conn.Write(response)
-	conn.Close()
+	_, err := conn.Write(response)
+	if err != nil {
+		slog.Error("failed to write to conn", "context_error", err)
+	}
+
+	err = conn.Close()
+
+	if err != nil {
+		slog.Error("failed to close conn", "context_error", err)
+	}
 }
 
 func (s *Server) Close() {
