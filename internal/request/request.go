@@ -17,13 +17,13 @@ const (
 	CRLF       = "\r\n"
 )
 
-type parserState string
+type parserState int
 
 const (
-	stateRequestLine parserState = "init"
-	stateHeaders     parserState = "headers"
-	stateBody        parserState = "body"
-	stateDone        parserState = "done"
+	stateRequestLine parserState = iota
+	stateHeaders     parserState = iota
+	stateBody        parserState = iota
+	stateDone        parserState = iota
 )
 
 type RequestLine struct {

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,7 +27,7 @@ func (e *HandlerError) Write(w io.Writer) error {
 	return err
 }
 
-type HandlerFunc func(w io.Writer, req *request.Request) *HandlerError
+type HandlerFunc func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	listener *net.Listener
@@ -91,17 +90,8 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
-	buf := bytes.NewBuffer([]byte{})
-	hErr := s.handler(buf, req)
-	if hErr != nil {
-		hErr.Write(conn)
-		return
-	}
-	b := buf.Bytes()
-	response.WriteStatusLine(conn, response.StatusOK)
-	headers := response.GetDefaultHeaders(len(b))
-	response.WriteHeaders(conn, headers)
-	conn.Write(b)
+	rWriter := response.NewWriter(conn)
+	s.handler(rWriter, req)
 }
 
 func (s *Server) Close() {

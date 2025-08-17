@@ -1,33 +1,88 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/SSL0/http-impl/internal/request"
+	"github.com/SSL0/http-impl/internal/response"
 	"github.com/SSL0/http-impl/internal/server"
 )
 
 const port = 42069
 
-func serverHandle(w io.Writer, req *request.Request) *server.HandlerError {
+const htmlBadRequest = `<html>
+  <head>
+	<title>400 Bad Request</title>
+  </head>
+  <body>
+	<h1>Bad Request</h1>
+	<p>Your request honestly kinda sucked.</p>
+  </body>
+</html>
+`
+
+const htmlInternalServerError = `<html>
+  <head>
+    <title>500 Internal Server Error</title>
+  </head>
+  <body>
+    <h1>Internal Server Error</h1>
+    <p>Okay, you know what? This one is on me.</p>
+  </body>
+</html>
+`
+
+const htmlOK = `<html>
+  <head>
+    <title>200 OK</title>
+  </head>
+  <body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+  </body>
+</html>
+`
+
+const htmlNotFound = `<html>
+  <head>
+    <title>404 Not Found</title>
+  </head>
+  <body>
+    <h1>Not Found</h1>
+    <p>Unknown resource</p>
+  </body>
+</html>
+`
+
+func serverHandle(resWriter *response.Writer, req *request.Request) {
 	switch req.RequestLine.RequestTarget {
 	case "/yourproblem":
-		return &server.HandlerError{
-			StatusCode: 400,
-			Message:    "Your problem is not my problem\n",
-		}
+		resWriter.WriteStatusLine(response.StatusBadRequset)
+		h := response.GetDefaultHeaders(len(htmlBadRequest))
+		h.Change("Content-Type", "text/html")
+		resWriter.WriteHeaders(h)
+		resWriter.WriteBody([]byte(htmlBadRequest))
 	case "/myproblem":
-		return &server.HandlerError{
-			StatusCode: 500,
-			Message:    "My bad\n",
-		}
+		resWriter.WriteStatusLine(response.StatusInternalServerError)
+		h := response.GetDefaultHeaders(len(htmlInternalServerError))
+		h.Change("Content-Type", "text/html")
+		resWriter.WriteHeaders(h)
+		resWriter.WriteBody([]byte(htmlInternalServerError))
+	case "/correct":
+		resWriter.WriteStatusLine(response.StatusOK)
+		h := response.GetDefaultHeaders(len(htmlOK))
+		h.Change("Content-Type", "text/html")
+		resWriter.WriteHeaders(h)
+		resWriter.WriteBody([]byte(htmlOK))
 	default:
-		w.Write([]byte("All good\n"))
-		return nil
+		resWriter.WriteStatusLine(response.StatusNotFound)
+		h := response.GetDefaultHeaders(len(htmlNotFound))
+		h.Change("Content-Type", "text/html")
+		resWriter.WriteHeaders(h)
+		resWriter.WriteBody([]byte(htmlNotFound))
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 const (
 	StatusOK                  = 200
 	StatusBadRequset          = 400
+	StatusNotFound            = 404
 	StatusInternalServerError = 500
 )
 
@@ -26,11 +27,70 @@ func StatusText(code int) string {
 		return "OK"
 	case StatusBadRequset:
 		return "Bad Request"
+	case StatusNotFound:
+		return "Not Found"
 	case StatusInternalServerError:
 		return "Internal Server Error"
 	default:
 		return ""
 	}
+}
+
+type writerState int
+
+const (
+	WritingStatusLine writerState = iota
+	WritingHeaders    writerState = iota
+	WritingBody       writerState = iota
+)
+
+type Writer struct {
+	writer io.Writer
+	state  writerState
+}
+
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{writer: w, state: WritingStatusLine}
+}
+
+func (w *Writer) WriteStatusLine(statusCode int) error {
+	if w.state != WritingStatusLine {
+		return fmt.Errorf("failed to write status line, writer state is different")
+	}
+	err := WriteStatusLine(w.writer, statusCode)
+	if err != nil {
+		return err
+	}
+	w.state = WritingHeaders
+	return nil
+}
+
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	if w.state != WritingHeaders {
+		return fmt.Errorf("failed to write status line, writer state is different")
+	}
+
+	err := WriteHeaders(w.writer, headers)
+	if err != nil {
+		return err
+	}
+	w.state = WritingBody
+
+	return nil
+}
+
+func (w *Writer) WriteBody(p []byte) error {
+	if w.state != WritingBody {
+		return fmt.Errorf("failed to write status line, writer state is different")
+	}
+
+	err := WriteBody(w.writer, p)
+	if err != nil {
+		return err
+	}
+	w.state = WritingBody
+
+	return nil
 }
 
 func WriteStatusLine(w io.Writer, statusCode int) error {
@@ -42,18 +102,9 @@ func WriteStatusLine(w io.Writer, statusCode int) error {
 
 	// HTTP-version SP status-code SP [ reason-phrase ]
 	statusLine := fmt.Sprintf("%s %d %s\r\n", httpVersion, statusCode, reasonPhrase)
-	slog.Info("write status line", "status-line", statusLine)
+	slog.Info("wrote status line", "status-line", statusLine)
 	w.Write([]byte(statusLine))
 	return nil
-}
-
-// Hardcoded
-func GetDefaultHeaders(contentLength int) headers.Headers {
-	h := headers.NewHeaders()
-	h.Set("Content-Length", strconv.Itoa(contentLength))
-	h.Set("Connection", "close")
-	h.Set("Content-Type", "text/plain")
-	return h
 }
 
 func WriteHeaders(w io.Writer, h headers.Headers) error {
@@ -65,7 +116,7 @@ func WriteHeaders(w io.Writer, h headers.Headers) error {
 	})
 	data = append(data, []byte(CRLF)...)
 
-	slog.Info("write status line", "data", data)
+	slog.Info("wrote headers", "data", data)
 	n, err := w.Write(data)
 
 	if err != nil {
@@ -77,4 +128,27 @@ func WriteHeaders(w io.Writer, h headers.Headers) error {
 	}
 
 	return nil
+}
+
+func WriteBody(w io.Writer, body []byte) error {
+	n, err := w.Write(body)
+
+	if err != nil {
+		return nil
+	}
+	slog.Info("wrote body", "data", body)
+
+	if l := len(body); n != l {
+		return fmt.Errorf("failed to write all body: written - %d, headers len - %d", n, l)
+	}
+	return nil
+}
+
+// Hardcoded
+func GetDefaultHeaders(contentLength int) headers.Headers {
+	h := headers.NewHeaders()
+	h.Set("Content-Length", strconv.Itoa(contentLength))
+	h.Set("Connection", "close")
+	h.Set("Content-Type", "text/plain")
+	return h
 }

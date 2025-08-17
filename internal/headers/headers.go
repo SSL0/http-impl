@@ -49,6 +49,15 @@ func (h *Headers) Set(key, value string) {
 	}
 }
 
+func (h *Headers) Change(key, newValue string) {
+	key = strings.ToLower(key)
+
+	if _, ok := (*h)[key]; ok {
+		key = strings.ToLower(key)
+		(*h)[key] = newValue
+	}
+}
+
 func (h *Headers) ForEach(callback func(k, v string)) {
 	for k, v := range *h {
 		callback(k, v)
