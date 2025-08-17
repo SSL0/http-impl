@@ -9,7 +9,6 @@ import (
 
 const (
 	CRLF                   = "\r\n"
-	CRLFLen                = 2
 	fieldValueInvalidChars = "\r\n\x00"
 )
 
@@ -72,7 +71,7 @@ func (h *Headers) Parse(data []byte) (n int, done bool, err error) {
 			break
 		}
 		if sepIdx == 0 {
-			n += CRLFLen
+			n += sepLen
 			done = true
 			break
 		}
@@ -88,7 +87,7 @@ func (h *Headers) Parse(data []byte) (n int, done bool, err error) {
 		h.Set(key, value)
 
 		data = data[sepIdx+sepLen:]
-		n += len(line) + CRLFLen
+		n += len(line) + sepLen
 	}
 
 	return n, done, nil

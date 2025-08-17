@@ -15,7 +15,6 @@ import (
 const (
 	bufferSize = 1024
 	CRLF       = "\r\n"
-	CRLFLen    = 2
 )
 
 type parserState string
@@ -163,7 +162,10 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 		return nil, 0, fmt.Errorf("data starts from whitespace")
 	}
 
-	idx := bytes.Index(data, []byte(CRLF))
+	sep := []byte(CRLF)
+	sepLen := len(sep)
+
+	idx := bytes.Index(data, sep)
 	if idx == -1 {
 		return nil, 0, nil
 	}
@@ -199,7 +201,7 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 		HttpVersion:   protocol,
 	}
 
-	return rl, len(startLine) + CRLFLen, nil
+	return rl, len(startLine) + sepLen, nil
 }
 
 func isUpperAndLetters(s string) bool {
