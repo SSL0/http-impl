@@ -244,7 +244,7 @@ func TestBodyParse(t *testing.T) {
 
 	t.Run("ok, no reported content length", func(t *testing.T) {
 		reader := &chunkReader{
-			data: "POST /submit HTTP/1.1\r\n" +
+			data: "GET /submit HTTP/1.1\r\n" +
 				"Host: localhost:42069\r\n" +
 				"\r\n",
 			numBytesPerRead: 3,
@@ -269,7 +269,7 @@ func TestBodyParse(t *testing.T) {
 		assert.Equal(t, "", string(r.Body))
 	})
 
-	t.Run("fail, Body shorter than reported content length", func(t *testing.T) {
+	t.Run("fail, body shorter than reported content length", func(t *testing.T) {
 		reader := &chunkReader{
 			data: "POST /submit HTTP/1.1\r\n" +
 				"Host: localhost:42069\r\n" +

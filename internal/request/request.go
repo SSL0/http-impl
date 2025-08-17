@@ -126,16 +126,15 @@ outer:
 			totalParsedBytes += n
 
 			if done {
-				r.state = stateBody
+				if r.Headers.GetInt("Content-Length", -1) > 0 {
+					r.state = stateBody
+				} else {
+					r.state = stateDone
+				}
 			}
 
 		case stateBody:
 			contentLength := r.Headers.GetInt("Content-Length", -1)
-
-			if contentLength == -1 {
-				r.state = stateDone
-				break outer
-			}
 
 			remaining := min(contentLength-len(r.Body), len(currentData))
 			r.Body = append(r.Body, currentData[:remaining]...)
