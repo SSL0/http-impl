@@ -57,7 +57,7 @@ func (w *Writer) WriteStatusLine(statusCode int) error {
 	if w.state != WritingStatusLine {
 		return fmt.Errorf("failed to write status line, writer state is different")
 	}
-	err := WriteStatusLine(w.writer, statusCode)
+	err := writeStatusLine(w.writer, statusCode)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 		return fmt.Errorf("failed to write status line, writer state is different")
 	}
 
-	err := WriteHeaders(w.writer, headers)
+	err := writeHeaders(w.writer, headers)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (w *Writer) WriteBody(p []byte) error {
 		return fmt.Errorf("failed to write status line, writer state is different")
 	}
 
-	err := WriteBody(w.writer, p)
+	err := writeBody(w.writer, p)
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (w *Writer) WriteBody(p []byte) error {
 	return nil
 }
 
-func WriteStatusLine(w io.Writer, statusCode int) error {
+func writeStatusLine(w io.Writer, statusCode int) error {
 	reasonPhrase := StatusText(statusCode)
 
 	if reasonPhrase == "" {
@@ -107,7 +107,7 @@ func WriteStatusLine(w io.Writer, statusCode int) error {
 	return nil
 }
 
-func WriteHeaders(w io.Writer, h headers.Headers) error {
+func writeHeaders(w io.Writer, h headers.Headers) error {
 	data := []byte{}
 
 	h.ForEach(func(k string, v string) {
@@ -130,7 +130,7 @@ func WriteHeaders(w io.Writer, h headers.Headers) error {
 	return nil
 }
 
-func WriteBody(w io.Writer, body []byte) error {
+func writeBody(w io.Writer, body []byte) error {
 	n, err := w.Write(body)
 
 	if err != nil {
