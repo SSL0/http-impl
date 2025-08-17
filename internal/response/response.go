@@ -73,7 +73,7 @@ func WriteHeaders(w io.Writer, h headers.Headers) error {
 	}
 
 	if l := len(data); n != l {
-		return fmt.Errorf("not all headers was written: written - %d, headers len - %d", n, l)
+		return fmt.Errorf("failed to write all headers data: written - %d, headers len - %d", n, l)
 	}
 
 	return nil

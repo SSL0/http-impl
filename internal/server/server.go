@@ -1,24 +1,50 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync/atomic"
 
+	"github.com/SSL0/http-impl/internal/request"
 	"github.com/SSL0/http-impl/internal/response"
 )
 
+type HandlerError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *HandlerError) Write(w io.Writer) error {
+	data := fmt.Sprintf("%d %s", e.StatusCode, e.Message)
+	n, err := w.Write([]byte(data))
+
+	if n != len(data) {
+		return fmt.Errorf("failed to write full handler error data: %s", data)
+	}
+
+	return err
+}
+
+type HandlerFunc func(w io.Writer, req *request.Request) *HandlerError
+
 type Server struct {
 	listener *net.Listener
+	handler  HandlerFunc
 	closed   atomic.Bool
 }
 
-func newServer(listener *net.Listener) *Server {
-	return &Server{listener: listener, closed: atomic.Bool{}}
+func newServer(l *net.Listener, f HandlerFunc) *Server {
+	return &Server{
+		listener: l,
+		handler:  f,
+		closed:   atomic.Bool{},
+	}
 }
 
-func Serve(port uint16) (*Server, error) {
+func ListenAndServe(port uint16, f HandlerFunc) (*Server, error) {
 	address := fmt.Sprintf(":%d", port)
 	l, err := net.Listen("tcp", address)
 
@@ -26,14 +52,14 @@ func Serve(port uint16) (*Server, error) {
 		return nil, err
 	}
 
-	server := newServer(&l)
+	server := newServer(&l, f)
 
-	go server.listen()
+	go server.Serve()
 
 	return server, nil
 }
 
-func (s *Server) listen() {
+func (s *Server) Serve() {
 	s.closed.Store(false)
 	for !s.closed.Load() {
 		conn, err := (*s.listener).Accept()
@@ -49,20 +75,33 @@ func (s *Server) listen() {
 }
 
 func (s *Server) handle(conn net.Conn) {
-	err := response.WriteStatusLine(conn, response.StatusOK)
+	defer conn.Close()
+
+	req, err := request.RequestFromReader(conn)
+
 	if err != nil {
-		slog.Error("failed to write status line", "context_error", err)
+		slog.Error("failed to get request from client", "context_error", err)
+
+		hErr := &HandlerError{
+			StatusCode: response.StatusBadRequset,
+			Message:    err.Error(),
+		}
+
+		hErr.Write(conn)
+		return
 	}
 
-	err = response.WriteHeaders(conn, response.GetDefaultHeaders(0))
-	if err != nil {
-		slog.Error("failed to write headers", "context_error", err)
+	buf := bytes.NewBuffer([]byte{})
+	hErr := s.handler(buf, req)
+	if hErr != nil {
+		hErr.Write(conn)
+		return
 	}
-
-	err = conn.Close()
-	if err != nil {
-		slog.Error("failed to close conn", "context_error", err)
-	}
+	b := buf.Bytes()
+	response.WriteStatusLine(conn, response.StatusOK)
+	headers := response.GetDefaultHeaders(len(b))
+	response.WriteHeaders(conn, headers)
+	conn.Write(b)
 }
 
 func (s *Server) Close() {
