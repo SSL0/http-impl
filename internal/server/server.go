@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net"
 	"sync/atomic"
+
+	"github.com/SSL0/http-impl/internal/response"
 )
 
 type Server struct {
@@ -47,14 +49,17 @@ func (s *Server) listen() {
 }
 
 func (s *Server) handle(conn net.Conn) {
-	response := []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello World!\n")
-	_, err := conn.Write(response)
+	err := response.WriteStatusLine(conn, response.StatusOK)
 	if err != nil {
-		slog.Error("failed to write to conn", "context_error", err)
+		slog.Error("failed to write status line", "context_error", err)
+	}
+
+	err = response.WriteHeaders(conn, response.GetDefaultHeaders(0))
+	if err != nil {
+		slog.Error("failed to write headers", "context_error", err)
 	}
 
 	err = conn.Close()
-
 	if err != nil {
 		slog.Error("failed to close conn", "context_error", err)
 	}
