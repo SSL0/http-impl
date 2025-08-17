@@ -67,7 +67,7 @@ func (w *Writer) WriteStatusLine(statusCode int) error {
 
 func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	if w.state != WritingHeaders {
-		return fmt.Errorf("failed to write status line, writer state is different")
+		return fmt.Errorf("failed to write headers, writer state is different")
 	}
 
 	err := writeHeaders(w.writer, headers)
@@ -81,7 +81,7 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 
 func (w *Writer) WriteBody(p []byte) error {
 	if w.state != WritingBody {
-		return fmt.Errorf("failed to write status line, writer state is different")
+		return fmt.Errorf("failed to write body, writer state is different")
 	}
 
 	err := writeBody(w.writer, p)
@@ -103,7 +103,16 @@ func writeStatusLine(w io.Writer, statusCode int) error {
 	// HTTP-version SP status-code SP [ reason-phrase ]
 	statusLine := fmt.Sprintf("%s %d %s\r\n", httpVersion, statusCode, reasonPhrase)
 	slog.Info("wrote status line", "status-line", statusLine)
-	w.Write([]byte(statusLine))
+	data := []byte(statusLine)
+	n, err := w.Write(data)
+
+	if err != nil {
+		return err
+	}
+
+	if l := len(data); n != l {
+		return fmt.Errorf("failed to write all status line data: written - %d, headers len - %d", n, l)
+	}
 	return nil
 }
 

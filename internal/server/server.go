@@ -81,12 +81,13 @@ func (s *Server) handle(conn net.Conn) {
 	if err != nil {
 		slog.Error("failed to get request from client", "context_error", err)
 
-		hErr := &HandlerError{
-			StatusCode: response.StatusBadRequset,
-			Message:    err.Error(),
-		}
+		errMsg := fmt.Sprintf(
+			"%d %s",
+			response.StatusBadRequset,
+			response.StatusText(response.StatusBadRequset),
+		)
 
-		hErr.Write(conn)
+		conn.Write([]byte(errMsg))
 		return
 	}
 
